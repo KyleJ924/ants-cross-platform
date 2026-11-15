@@ -53,6 +53,14 @@ class Limits:
     login_refill_seconds: float = 6.0
     session_burst: int = 20             # /hub/me, /hub/logout and /hub/forget: a burst of 20, then one every 3 seconds
     session_refill_seconds: float = 3.0
+    admin_burst: int = 60               # the admin page's door (hub/admindoor.py: the gate and /hub/admin/api/*): for each client address a burst of 60, then one every second
+    admin_refill_seconds: float = 1.0
+    admin_lookups_burst: int = 3        # an account that is not an administrator (as far as the hub knows) makes the hub ask Discord again at most this often: a burst of 3, then one every 20 seconds
+    admin_lookups_refill_seconds: float = 20.0
+    admin_door_burst: int = 5           # the lookups that the door asks for on its own (an administrator whose answer is a minute old): the door's whole share, a burst of 5, then one every 5 seconds; the moderators' actions have a share of their own
+    admin_door_refill_seconds: float = 5.0
+    admin_door_new_burst: int = 2       # a second, small share for an account that the hub has never known to hold a role (so that many plain accounts cannot use up the door's share for the staff): a burst of 2, then one every 30 seconds
+    admin_door_new_refill_seconds: float = 30.0
     login_inflight: int = 6             # logins that wait for Discord at one time (the 7th gets the page "Login unavailable" at once, and the sockets never wait for it)
     login_states_max: int = 10000       # logins that were started and not finished (each is about 200 bytes of memory); the oldest go first
     state_seconds: float = 600.0        # how long a login may take, from /hub/login to /hub/callback
@@ -93,6 +101,7 @@ class Limits:
     picture_inflight: int = 2           # fetches at one time ...
     picture_waiting: int = 32           # ... and waiting for their turn (more are dropped: the letters stay; one account has one fetch waiting or running at a time, and a new login always gets its fetch once that one is done)
     picture_dropped_log_seconds: float = 10.0   # a fetch that was dropped (the queue was full, or the account's fetch was still waiting) is counted, and a line says how many, this seldom at the most
+    picture_lookup_seconds: float = 86400.0     # a person's profile is asked for (a person not in the server, or roles off) at most this often, one a day; the roles' check gives a member's picture code every re-check
     picture_burst: int = 5              # fetches for the whole hub: a burst of 5, then one every `picture_refill_seconds`
     picture_refill_seconds: float = 1.0
     picture_serve_burst: int = 240      # /hub/pic/ answers for one client address: a burst of 240 (one whole list of the front page), then twenty a second (nginx has the same numbers in front)

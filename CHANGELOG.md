@@ -23,6 +23,43 @@ Work that is not released yet is written in the same template under a heading th
 `tools/release.py X.Y.Z "title"` turns that heading into "## vX.Y.Z - date - title" and refuses when there is no "## Next" or it is empty.
 -->
 
+## v0.16.10 - 2026-11-15 - Chat box on one row, computer players take back power-ups and contest the ISLANDS ring
+
+**For players:**
+- **The chat box starts as one row.** On the front page the field, the emoji and microphone buttons and Send are on one row in every window. When your words need a second line, the field takes the top row and the buttons and Send move to a row under it at the right; it goes back to one row when the words fit again. The box has the same rounded corners as the site's buttons.
+- **Computer players take back power-ups.** Medium and Hard computer players now pick up a power-up that was dropped by an ant of a kind their team has lost, such as a Combat or Swimmer power-up. Hard also goes for dropped Fire, Bomber and Thief power-ups of other sides. Easy plays as before.
+- **Hard computer players on ISLANDS contest the ring.** One of their Bombers flies to the island of a ring pile and lays mines on the way to it, so a rival's Swimmers are thrown back. A Swimmer that was hit is sent back to work, each ring pile gets three Swimmers, and the crew digs the one tile that links the ring to the flower strip beside it so that Swimmer power-ups can be fetched. Easy, Medium and the other maps are unchanged.
+
+**Rules / network:** none: network protocol 23 and the rules numbers are unchanged, so a v0.16.9 page or game still joins. Under the hood: the game server and the web pages are rebuilt; the chat server is unchanged.
+
+**Details:** [commits](https://github.com/dchadd427/ants-cross-platform/compare/491ca15c...c52809d1)
+
+## v0.16.9 - 2026-11-14 - Numbers in the game's font, chat links and times, Discord server nicknames, a resizable front page
+
+**For players:**
+- **Numbers in the game's own font.** Hit points (Ctrl+L), damage and heal numbers and score numbers are drawn in the same letters as the game's labels, white with a thin dark outline (heal numbers pale green) and sharp at every window size. A damage or heal number now starts on the middle of the ant, keeps one size, floats up, fades and shrinks as it goes.
+- **Chat links and times.** An address that starts with http://, https:// or www. in a chat line is a link that opens in a new tab (long ones are shortened in the middle; the whole address is in its tip). Every line starts with the time, in your own time zone and clock style, with a small Today / Yesterday / date divider between days. Lines no longer show numbers; staff see the number in the tip of the time.
+- **Your Discord server nickname is your chat name.** The name shown is now your nickname in the project's Discord server, else your Discord display name, else your username. The switch in the chat menu still offers the username. A changed nickname shows from the next roles check, within a few minutes; old lines keep the name they had.
+- **A front page you can resize.** On a wide window (701 pixels and up), drag the join between Open games and Players, or the top of Global chat, to give one more room. Arrow keys move a handle, Enter or a double click puts it back, and the sizes are kept in this browser. A phone has no handles.
+
+**Rules / network:** none: network protocol 23 and the rules numbers are unchanged, so a v0.16.8 page or game still joins. Under the hood: the chat server changed, so it restarts and chat reconnects by itself within seconds; it also holds code for a future admin page that no page uses yet.
+
+**Details:** [commits](https://github.com/dchadd427/ants-cross-platform/compare/a364d921...f2d101bf)
+
+## v0.16.8 - 2026-11-14 - Game page top bar, Playing in the Players list, one chat box, Discord pictures without a new login
+
+**For players:**
+- **The game page has the site's top bar.** A game against the computer, a joined match, a recording and a live view show the same bar as every other page: Home, the links, the Settings gear, Fullscreen and Menu. The footer is gone; the version is the last line of the Menu. During a match, Home asks first and the other links open in a new tab, and while the Menu is open the keys stay with the bar and go back to the game afterwards. Reload page, which asks first during a game, is in the Menu.
+- **The Players list shows who is Playing.** A public match shows its map and players, a private room or game shows a lock and no details, and a game against the computer reads "<map> . vs computer". The Games list no longer shows an empty "In progress" box while no match is running.
+- **One chat box everywhere.** The box with the field on top and the emoji, microphone and Send buttons under it is now used in every window; the field grows to two lines on a wide window and the chat area is a little taller.
+- **Discord pictures arrive without logging in again.** A picture is picked up while you are logged in: within a few minutes for members of the project's Discord server, otherwise about a day. The Legal page says so.
+- **Live mark.** The red "N live" mark reads "N live: see them on the front page", shows its dot in forced-colors mode and updates when you come back to the tab. The old Live now addresses lead to the front page in any letter case.
+- **Chat staff commands.** Staff can name a person by the number of the chat line or by their row in the Players list, list the mutes with /mutes, and a ban can also delete that person's lines of the last hour.
+
+**Rules / network:** none: network protocol 23 and the rules numbers are unchanged, so a v0.16.7 page or game still joins. Under the hood: the chat server changed, so it restarts and chat reconnects by itself within seconds.
+
+**Details:** [commits](https://github.com/dchadd427/ants-cross-platform/compare/f6d76998...1b43c0b5)
+
 ## v0.16.7 - 2026-11-14 - Phone hotkey buttons, damage and heal numbers, Automatic picture shape
 
 **For players:**
@@ -449,49 +486,6 @@ Work that is not released yet is written in the same template under a heading th
 
 **Details:** [commits](https://github.com/dchadd427/ants-cross-platform/compare/99261f5d...85c01ad8), [the warning](docs/MAP_SUBMISSIONS.md#older-games-and-big-maps)
 
-## v0.12.130 - 2026-10-25 - Map Maker: hold Shift or Ctrl to paint a straight line
+## Older versions (v0.12.130 and before)
 
-**For players:**
-- **Map Maker: hold Shift or Ctrl while you paint and the stroke stays on one straight line.** It works for Ground (with Auto edges), Objects (rocks and power-ups) and Erase, with the mouse. The line goes straight across or straight down through the square where you pressed, whichever way your first move away from that square goes farther (exactly diagonal goes across), and it stays that way until you let go of the mouse button. Until you leave the first square only that square is painted, and a line that runs off the map ends at the edge.
-- **Let go of the key in the middle of a stroke and you paint freely again** from where the line ended; press it again and the square you are on starts a new line. Press the key before the mouse button and the line starts where you press. On a Mac use Shift, because Ctrl-click is a right click there.
-- Painting with no key is exactly as before, a finger on a touch screen is unchanged, and tools that put a whole thing with a tap, Fill, Pan, Pick up and the Ants box do not change. Map Maker v1.5.8.
-
-**Rules / network:** none: network protocol 21 and the simulation rules are unchanged (the web page only).
-
-**Details:** [commits](https://github.com/dchadd427/ants-cross-platform/compare/99261f5d...24364af2)
-
-## v0.12.129 - 2026-10-25 - Big selections follow the original's rules
-
-**For players:**
-- **A big selection is ordered with the original's rules for every ant.** Ctrl+A or a drag over any number of ants, then a right click: every selected ant gets the move, attack or Stop order (one click orders up to 1,536 ants; "Only 1536 ants ordered." beyond that). The limit of v0.12.126 for a move is gone. Ants that find no free spot near the clicked tile stop where they stand, as in the original; a move onto an enemy hill makes thieves raid and stops the other ants.
-- **Special orders stay one ant at a time:** steal, bomb, fire and bridge orders go to the first 32 selected ants at the most, as before v0.12.126, so a crowd cannot steal from one ant or drop 80 bombs on one square. Order those ants one by one.
-- A move of a whole army makes the game work hard for a moment while the ants look for a spot. One player's click on a big army costs a few to tens of milliseconds; it is only noticeable when four players' big clicks land together (about 1,500 ants each costs more than a second on a desktop, and a phone is several times slower).
-
-**Rules / network:** none; network protocol 21 is unchanged.
-
-**Details:** [commits](https://github.com/dchadd427/ants-cross-platform/compare/0ba63ac2...961523be)
-
-## v0.12.128 - 2026-10-25 - The Picture dropdown opens in fullscreen
-
-**For players:**
-- **The Picture dropdown now opens in fullscreen.** Watching a replay or a live match in fullscreen with the mouse held (the default, "Locked"), a click on the dropdown in the Picture window did nothing: the browser's own list cannot be opened by the game's held mouse. The control is now the page's own button and list, so a click or a tap opens it and a click or a tap on a shape chooses it, in fullscreen, in the settings menu (Esc), under the game and in the Picture window, on every browser. It looks as before.
-- **Keys:** Enter, Space, ArrowDown or ArrowUp open the list; the arrows, Home, End, a letter or a number ("4" for Classic 4:3) move the mark; Enter or Space chooses; Esc closes the list and only the list (the Picture window or the settings menu stays open). On a closed dropdown the arrow keys no longer change the picture (they did on Windows and Linux); they open the list, the same on every browser. The front page's Picture row is unchanged.
-
-**Rules / network:** none: network protocol 21 and the simulation rules are unchanged (the web page only).
-
-**Details:** [commits](https://github.com/dchadd427/ants-cross-platform/compare/0ba63ac2...025710cf)
-
-## v0.12.127 - 2026-10-24 - Map Maker: the Pick up bar no longer covers the map
-
-**For players:**
-- Map Maker, Pick up: the bar with Move, Copy here, Delete and Cancel no longer covers the bottom of the map. On a desktop it has a row of its own under the map, so the map ends above it and can be panned until its last row is above the bar; a thing picked near the bottom is brought into view, and the map keeps its top row and its zoom when the bar comes and goes. A phone's bar stays at the foot of the screen, and the page can be scrolled until its last line is above it. Map Maker v1.5.7.
-
-**Fixes:**
-- On a short screen the Hide button sits on the line of the words, so the bar is lower; a map under 300 pixels high shows the smaller map of the whole map, without its caption, so that it never reaches into the bar.
-- While a thing is on its way the bar keeps the height it has had, so the map no longer grows and shrinks under the mouse near the foot; a phone that is turned with the bar open leaves room for all of it below the page, and a window that is resized while a thing is on its way logs no "ResizeObserver loop" message.
-
-**Details:** [commits](https://github.com/dchadd427/ants-cross-platform/compare/50b7ae4b...67a05f86)
-
-## Older versions (v0.12.126 and before)
-
-Every release before v0.12.127, and the long notes of v0.12.126 - v0.12.69, v0.12.59 - v0.12.55, v0.12.53 - v0.12.48, v0.12.46 - v0.12.35, v0.12.33 - v0.12.26, v0.12.24 - v0.12.18, v0.12.16 - v0.12.0, v0.11.0, v0.10.0, v0.9.1, v0.9.0, v0.8.3, v0.8.2, v0.8.1, v0.8.0, v0.7.0, v0.6.0, v0.5.1, v0.5.0, v0.4.0, v0.3.0, v0.2.0, v0.1.3, v0.1.2, v0.1.1, v0.1.0 and v0.0.99 - v0.0.90, are only in the git history.
+Every release before v0.12.131, and the long notes of v0.12.130 - v0.12.69, v0.12.59 - v0.12.55, v0.12.53 - v0.12.48, v0.12.46 - v0.12.35, v0.12.33 - v0.12.26, v0.12.24 - v0.12.18, v0.12.16 - v0.12.0, v0.11.0, v0.10.0, v0.9.1, v0.9.0, v0.8.3, v0.8.2, v0.8.1, v0.8.0, v0.7.0, v0.6.0, v0.5.1, v0.5.0, v0.4.0, v0.3.0, v0.2.0, v0.1.3, v0.1.2, v0.1.1, v0.1.0 and v0.0.99 - v0.0.90, are only in the git history.

@@ -20,12 +20,14 @@ share of its own, `roles_urgent_burst` and one more a second, so that a moderato
 in time, for any reason, refuses the action (`role`), and no role that is merely believed is ever enough. An urgent lookup is a lookup like another: the Discord id of the person is in the request
 and nowhere else.
 
+The same answer carries the person's picture code, which is handed to hub/pictures.py (`on_avatar`; a person who is not in the server is `on_absent`) and kept here no more than the role's other fields are written down: not at all. The pictures take their lookups' turns from this bucket (`spare_turn`).
+
 Nothing in a log line, an error or a frame holds the token, the server's id, a role's id or an account: the log says a kind and a status. The token is read once, from the settings.
 """
 import asyncio
 import random
 
-from . import config, discord as discordmod
+from . import config, discord as discordmod, text
 from .limits import TokenBucket
 
 NONE, MOD, ADMIN = "none", "mod", "admin"
@@ -50,7 +52,7 @@ class Entries(dict):
 class Entry:
     """What is known of one person who is here: the role that Discord last said, when, when to ask again, and the role that the pages were last told."""
 
-    __slots__ = ("role", "ok_at", "due", "fails", "new", "seen", "shown", "lost_at")
+    __slots__ = ("role", "ok_at", "due", "fails", "new", "seen", "shown", "lost_at", "nick", "display")
 
     def __repr__(self):
         return "<Entry>"                        # (no field: none of them is for a log, and the dictionary that holds it is keyed by the account)
@@ -64,6 +66,8 @@ class Entry:
         self.seen = now                         # when the person last had a socket
         self.shown = NONE                       # the role that the person's pages were last told
         self.lost_at = None
+        self.nick = ""                          # the person's nickname in the server as the last member answer said it, made fit to show (text.clean_shown), or '' (none, not usable, not a member)
+        self.display = None                     # the person's Discord display name as that same answer said it, made fit to show, or '' for none; None when the answer did not say
 
 
 class Roles:
@@ -82,6 +86,9 @@ class Roles:
         self.entries = Entries()                # account -> Entry, for the accounts that have a socket open (and, for one grace, those that had)
         self.connected = lambda: ()             # the accounts that have a socket open (the chat sets it)
         self.changed = lambda account: None     # called when the role that an account's pages should show changed (the chat sets it)
+        self.on_avatar = lambda account, avatar: None      # called with the picture's short code (or None) that Discord's member answer says (hub/pictures.py `refresh`; the code is never kept here)
+        self.on_names = lambda account, nick, display: None      # called with the nickname and the display name that Discord's member answer says (see `tell_names`; the chat shows them)
+        self.on_absent = lambda account: None   # called when Discord says the person is not in the server (hub/pictures.py `lookup`)
         self.bucket = TokenBucket(limits.roles_burst, limits.roles_refill_seconds, clock())
         self.pause_until = float("-inf")        # no call before this (a refused token, server or access)
         self.hold_until = float("-inf")         # no call before this (Discord said wait)
@@ -160,6 +167,14 @@ class Roles:
             return False
         bucket.tokens -= count
         return True
+
+    def spare_turn(self):
+        """A turn of the bucket of the lookups for a call that is not a role's (the picture of a person who is not in the server, hub/pictures.py): None when the lookups are stopped (Discord refused or said wait),
+        True when a turn was taken, False when there is none now. The pace is the same one, two a second for all of them together."""
+        now = self.clock()
+        if not self.on or now < self.pause_until or now < self.hold_until:
+            return None
+        return self.bucket.take(now)
 
     def next_urgent(self):
         """The account of an action that waits for a lookup, first come first served (futures that were cancelled, by an action that gave up, are dropped)."""
@@ -327,10 +342,12 @@ class Roles:
         code = data.get("code")
         if type(code) is not int:
             code = None
+        absent = False
         if status == 200:
             role = self.role_in(data, account)
         elif status == 404 and code in (NOT_A_MEMBER, UNKNOWN_USER):
             role = NONE
+            absent = code == NOT_A_MEMBER
         elif status == 404 and code == UNKNOWN_GUILD:
             self.refused("guild", status, now)
             return False
@@ -358,7 +375,36 @@ class Roles:
         if self.down:
             self.down = False
             self.log.event("roles_up")
+        if entry is not None:
+            member = data if status == 200 and role is not None else None
+            self.tell_pictures(account, member, absent)
+            self.tell_names(account, entry, member)
         return entry is not None
+
+    def tell_names(self, account, entry, data):
+        """What the answer says of the person's names, handed on: the server nickname (`nick`, text or null) and the Discord display name (`user.global_name`), each made fit to show (text.clean_shown).
+        A person who is not a member has no nickname. The same answer is used: there is no call of its own. A bug here is logged by its class and never fails the check."""
+        try:
+            user = data.get("user") if data is not None else None
+            entry.nick = text.clean_shown(data.get("nick")) if data is not None else ""
+            if isinstance(user, dict) and "global_name" in user:
+                entry.display = text.clean_shown(user["global_name"])
+            self.on_names(account, entry.nick, entry.display)
+        except Exception as e:
+            self.trouble(e, "names")
+
+    def tell_pictures(self, account, data, absent):
+        """What the answer says of the picture, handed on (a member's picture code, or that the person is not in the server): the pictures decide, and nothing here keeps it or can fail the check."""
+        try:
+            if absent:
+                self.on_absent(account)
+            user = data.get("user") if data is not None else None
+            if isinstance(user, dict) and "avatar" in user:
+                valid, code = discordmod.Discord.avatar_code(user["avatar"])
+                if valid:
+                    self.on_avatar(account, code)
+        except Exception as e:
+            self.trouble(e, "pictures")
 
     def role_in(self, data, account):
         """The role that a member object says (`admin`, `mod` or `none`), or None when it is not the shape of a member: roles that are a list of at most 250 ids, and a user, if there is one,

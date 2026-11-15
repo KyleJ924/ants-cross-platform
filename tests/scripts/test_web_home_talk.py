@@ -139,7 +139,7 @@ class ThePageAndTheOtherPages(unittest.TestCase):
                 if re.search(r"/hub/ws", text):
                     naming_the_socket.add(rel)
         self.assertEqual(sorted(naming_them), ["web/home/home.js", "web/home/talk.css"], "only the front page's own script asks for them (the style names its script)")
-        self.assertEqual(sorted(naming_the_socket), ["web/home/chat.js"])
+        self.assertEqual(sorted(naming_the_socket), ["web/home/chat.js", "web/hub_here.js"])
 
     def test_the_game_and_the_other_pages_never_hear_of_them(self):
         for rel in (("web", "shell.html"), ("web", "front", "lobby_net.js"), ("web", "front", "lobby_chat.js"), ("web", "front", "lobby_rules.js")):
@@ -234,22 +234,45 @@ class TheStyle(unittest.TestCase):
     def rule(self, selector):
         return next(body for sel, body in self.rules if sel.strip() == selector)
 
-    def test_the_picker_lies_over_the_log_right_above_the_form_and_the_words_are_the_forms_first_row(self):
+    def test_the_picker_lies_over_the_log_right_above_the_form_and_the_words_are_a_bubble_that_takes_no_room(self):
         picker = self.rule(".gt-pick")
         for part in ("position: absolute;", "bottom: 100%;", "left: 0;", "right: 0;"):
             self.assertIn(part, picker, part)
         self.assertIn("position: relative;", self.rule(".gc-form.gt-on"), "the picker is placed against the form")
-        self.assertIn("grid-column: 1 / -1;", self.rule(".gt-say"))
+        for part in ("position: absolute;", "bottom: 100%;"):
+            self.assertIn(part, self.rule(".gt-say"), "the line of words is a bubble over the log: it takes no room")
         self.assertNotRegex(self.css, r"position: *fixed")
         self.assertEqual(self.css.count("z-index"), 2, "two layers over the log: the picker's (2) and the voice line's (3, so that \"The message is full.\" shows over the open picker)")
-        self.assertIn("grid-template-columns: minmax(0, 1fr) auto auto; }", self.css)
+        self.assertIn("grid-template-columns: minmax(0, 1fr) auto auto;", self.css)
         self.assertIn("pick.style.maxHeight = Math.max(72, Math.min(180, ", read("web", "home", "talk.js"), "the script sets its height to the room above the form")
 
-    def test_the_middle_widths_put_the_two_buttons_in_a_row_of_their_own_under_the_field_and_send(self):
-        self.assertIn("@media (min-width: 701px) and (max-width: 1000px) and (min-height: 501px) {\n    .gc-form.gt-on { grid-template-columns: minmax(0, 1fr) auto; }", self.css)
-        narrow = self.css[self.css.index("@media (min-width: 701px) and (max-width: 1000px) and (min-height: 501px) {\n"):]
-        self.assertIn(".gt-on .gt-tools { order: 3; grid-column: 1 / -1; }", narrow)
-        self.assertIn(".gt-on .gc-input { order: 1; } .gt-on .gc-send { order: 2; } .gt-on .gc-login { order: 2; }", narrow, "the field, Send and the login button keep their order when the buttons move to the last row")
+    def test_the_corners_are_the_sites_not_a_pill(self):
+        classic = read("web", "front", "classic.css")
+        site = re.search(r"\.btn, \.banner \{[^}]*?border-radius: (\d+px);", classic).group(1)
+        self.assertEqual(site, "8px", "the site's button radius")
+        radius = lambda sel: re.search(r"border-radius: ([^;]+);", self.rule(sel))
+        self.assertEqual(radius(".gc-form.gt-on").group(1), site, "the box has the radius of the site's buttons")
+        self.assertIsNone(radius(".gt-on .gc-send"), "Send keeps the site's .btn radius: no override of its own")
+        self.assertEqual(radius(".gt-on .btn.gt-btn").group(1), site, "the emoji and microphone buttons are squares with the site's corners")
+        for sel in (".gt-pick", ".gt-say"):
+            self.assertEqual(radius(sel).group(1), site, sel)
+        self.assertNotRegex(self.css, r"border-radius: *50%", "no circles")
+        self.assertNotRegex(self.css, r"border-radius: (?:1[0-9]|[2-9][0-9])px", "no pill")
+
+    def test_one_composer_in_every_window_one_row_with_the_buttons_at_the_left_and_two_rows_when_the_words_need_them(self):
+        self.assertIn('grid-template-columns: minmax(0, 1fr) auto auto; grid-template-areas: "f t s";', self.rule(".gc-form.gt-on"), "one row at first: the field, the buttons at the right, Send")
+        self.assertIn('grid-template-areas: "f f f" ". t s";', self.rule(".gc-form.gt-on.gt-tall"), "the class that the script sets: the field on top over the whole width, the buttons and Send under it, at the right")
+        self.assertNotIn('"f f f"', self.rule(".gc-form.gt-on"), "the two-row grid is not the box's own")
+        self.assertIn("max-height: 66px;", self.rule(".gt-on textarea.gc-input"), "two lines in a wide window")
+        self.assertIn('grid-template-areas: "f s"; padding: 4px 6px 4px 4px;', self.rule(".gc-form.gt-on:has(.gc-input:disabled)"), "the off field is one row, with the class or without it")
+        low = self.css[self.css.index("@media (max-height: 500px) {"):]
+        self.assertIn('grid-template-areas: "f t s";', low, "a low window: one row, the field, the buttons, Send")
+        self.assertIn(".gc-form.gt-on.gt-tall", low.split("{")[1], "a low window: the class changes nothing")
+        self.assertIn(".gt-on textarea.gc-input, .gt-tall.gt-on textarea.gc-input { max-height: 44px; }", low)
+        self.assertNotIn("(min-width: 701px) and (max-width: 1000px)", self.css.replace("@media (min-width: 701px) and (min-height: 501px)", ""), "no composer of its own for the middle widths")
+        self.assertNotIn("order: 3", self.css, "no button row that is placed by order: the grid areas place everything")
+        for part in (".gt-on .btn.gt-btn", ".gt-on .gc-send"):
+            self.assertIn("min-height: 44px;", self.rule(part), part)
 
     def test_every_target_is_at_least_44_px_high_and_wide(self):
         for selector in (".gt-btn", ".gt-e"):
@@ -266,8 +289,8 @@ class TheStyle(unittest.TestCase):
         self.assertIn("overflow-y: auto", self.rule(".gt-pick"))
         self.assertIn("max-height: 150px;", self.rule(".gt-pick"), "without the script's measure (a page that cannot measure) it is 150 px")
 
-    def test_the_dock_is_taller_where_the_buttons_have_a_row_of_their_own(self):
-        self.assertIn("@media (min-width: 701px) and (max-width: 1000px) and (min-height: 501px) { .gc[data-open=\"true\"]:has(.gc-form.gt-on) { height: clamp(240px, 38vh, 320px); } }", self.css, "the middle widths: the dock is about 60 to 80 px taller (its own is 160 to 260 px), so that the log keeps its room")
+    def test_the_dock_is_taller_only_while_the_box_has_two_rows(self):
+        self.assertIn("@media (min-width: 701px) and (min-height: 501px) { .gc[data-open=\"true\"]:has(.gc-form.gt-on.gt-tall) { height: clamp(240px, 34vh, 300px); } }", self.css, "a wide window: the dock is 240 to 300 px (its own is 160 to 260 px), so that the log keeps its room")
 
     def test_the_two_pictures_are_inline_svg_in_the_buttons_own_color_and_the_listening_microphone_is_solid(self):
         self.assertIn("stroke: currentColor;", self.rule(".gt-ico"))
@@ -322,11 +345,11 @@ class TheCodeRuns(unittest.TestCase):
 class TheChecksAreNotVacuous(unittest.TestCase):
     """the mutants of tests/data/home_talk_mutants.json (the list that tools/mutate.py runs too, with `--keep-going --jobs 1`) on a COPY of the files, one at a time: each must make the checks fail, and the
     copy with nothing changed must pass"""
-    FILES = (["tools/size_limits.py", "web/lobby.html", "web/rejoin_key.js", "web/front/player_name.js", "web/shapes.js", "web/home/home.js", "web/home/home.css", "web/home/chat.js", "web/home/chat.css", "web/home/talk.js", "web/home/talk.css",
+    FILES = (["tools/size_limits.py", "web/lobby.html", "web/rejoin_key.js", "web/hub_here.js", "web/front/player_name.js", "web/shapes.js", "web/home/home.js", "web/home/home.css", "web/home/chat.js", "web/home/chat.css", "web/home/talk.js", "web/home/talk.css",
               "tests/scripts/test_web_home_talk.py", "tests/scripts/web_home_talk_check.js", "tests/scripts/web_page_harness.js", "Dockerfile", "build_web.sh", ".github/workflows/ci.yml",
               "web/matches.html", "web/match.html", "web/legal.html", "web/mapmaker.html", "web/shell.html", "web/admin.html", "docs/HOME_SCREEN.md",
               "hub/__init__.py", "hub/text.py", "hub/limits.py"]
-             + ["web/front/" + n for n in ("lobby_rules.js", "lobby_net.js", "lobby_chat.js", "lobby_chat.css", "rematch.js", "game_modes.js", "game_type.js", "map_picker.js", "map_maker_link.js")])
+             + ["web/front/" + n for n in ("classic.css", "lobby_rules.js", "lobby_net.js", "lobby_chat.js", "lobby_chat.css", "rematch.js", "game_modes.js", "game_type.js", "map_picker.js", "map_maker_link.js")])
 
     @classmethod
     def setUpClass(cls):
