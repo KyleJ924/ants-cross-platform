@@ -1,11 +1,13 @@
 // Tests of the list of maps (MapStore::scan, list_json, GET /maps on the public door, docs/SERVER.md "The list of maps") and of the lobby's choice of map: the six originals first, the community folder with
 // its maps.json and previews.json (the list says what the files say), the play counts from the database keyed by file name and hash (0 without one), names with spaces and odd characters, a bad json
 // file or a file with another hash, the lobby that may choose every map of the store (and nothing that cannot be a file name), and the query/method rules of the door.
+#include <algorithm>
 #include <cstdlib>
 #include <fstream>
 #include <functional>
 #include <iomanip>
 #include <iostream>
+#include <map>
 #include <set>
 #include <tuple>
 
@@ -108,9 +110,16 @@ int main() {
         ASSERT_EQ(list.get("maps").size(), n - inactive.size());
         for (size_t i = 7; i < list.get("maps").size(); ++i) ASSERT_TRUE(list.get("maps").at(i).get("file").str() > list.get("maps").at(i - 1).get("file").str());
         for (size_t i = 0; i < 6; ++i) ASSERT_TRUE(list.get("maps").at(i).get("original").as_bool_or(false));
-        std::set<std::string> listed_hashes;
-        for (size_t i = 0; i < json.get("maps").size(); ++i) {
-            if (inactive.count(json.get("maps").at(i).get("file").str()) == 0) listed_hashes.insert(json.get("maps").at(i).get("hash").str());
+        std::map<std::string, std::vector<std::string>> same_bytes;                               // hash -> the names of that file
+        for (size_t i = 0; i < json.get("maps").size(); ++i) same_bytes[json.get("maps").at(i).get("hash").str()].push_back(json.get("maps").at(i).get("file").str());
+        const auto a_to_z = [](const std::string& f) {                                             // (Community-Maps/README.md: first from A to Z, letter case aside, without .lvl)
+            std::string stem = f.substr(0, f.size() - 4);
+            for (char& c : stem) c = static_cast<char>(c >= 'A' && c <= 'Z' ? c - 'A' + 'a' : c);
+            return std::make_pair(stem, f);
+        };
+        for (const auto& group : same_bytes) {
+            const std::string first = *std::min_element(group.second.begin(), group.second.end(), [&](const std::string& x, const std::string& y) { return a_to_z(x) < a_to_z(y); });
+            for (const std::string& f : group.second) ASSERT_EQ(inactive.count(f) == 1, f != first);   // (of every file exactly its first name is offered; a map of its own is never inactive)
         }
         for (size_t i = 0; i < json.get("maps").size(); ++i) {
             const ctl::JsonValue& want = json.get("maps").at(i);
@@ -121,7 +130,6 @@ int main() {
                 ASSERT_EQ(store.listed_name(file), file);                                          // (... but it is still chosen and found by its name)
                 MapEntry entry;
                 ASSERT_TRUE(store.find(file, entry));
-                ASSERT_TRUE(listed_hashes.count(want.get("hash").str()) == 1);                    // (the same file is listed under another name)
                 continue;
             }
             ASSERT_TRUE(got != nullptr);
@@ -310,7 +318,7 @@ int main() {
         ASSERT_TRUE(notes.size() <= 2);                                                            // (a path that cannot be looked at is a note, or simply not there: never an exception)
     } TEST_END();
 
-    TEST_CASE("ML2.4 inactive.json: a map it names is left out of GET /maps and /maps/all but still found, served and chosen by the lobby; a name that is no map of the community folder, or a bad file, is a note") {
+    TEST_CASE("ML2.4 inactive.json: a map it names is left out of GET /maps and /maps/all but still found, served and chosen by the lobby, and its plays count with the offered name of the same file; a name the folder does not offer, a map with no offered twin, a row without a file, another format or a bad file is a note") {
         TempDir t;
         const fs::path maps = t.path / "maps";
         const fs::path community = t.path / "community";
@@ -319,29 +327,46 @@ int main() {
         copy_map(maps_dir() + "/TINY.LVL", maps, "TINY.LVL");
         copy_map(maps_dir() + "/SMALL.LVL", community, "Kept.lvl");
         copy_map(maps_dir() + "/SMALL.LVL", community, "Kept 2.lvl");
-        std::ofstream(community / "inactive.json") << R"({"format":1,"inactive":[{"file":"Kept 2.lvl","reason":"the same file as Kept.lvl"},{"file":"TINY.LVL","reason":"x"},{"file":"Ghost.lvl","reason":"x"}]})";
+        copy_map(maps_dir() + "/MEDIUM.LVL", community, "Alone.lvl");
+        std::ofstream(community / "inactive.json") << R"({"format":1,"inactive":[{"file":"Kept 2.lvl","reason":"the same file as Kept.lvl"},{"file":"TINY.LVL","reason":"x"},)"
+                                                    << R"({"file":"Ghost.lvl","reason":"x"},{"file":"Alone.lvl","reason":"x"},{"reason":"no file"}]})";
         MapStore store(maps.string(), community.string());
         std::vector<std::string> notes;
-        ASSERT_EQ(store.scan(&notes), size_t{3});
-        ASSERT_EQ(notes.size(), size_t{2});                                                        // (Ghost.lvl is not there; TINY.LVL is the maps folder's, which inactive.json does not reach)
+        ASSERT_EQ(store.scan(&notes), size_t{4});
+        ASSERT_EQ(notes.size(), size_t{4});         // (the row without a file; Ghost.lvl is not there; TINY.LVL is the maps folder's, which inactive.json does not reach; Alone.lvl has no offered twin)
+        MapEntry kept;
+        ASSERT_TRUE(store.find("Kept.lvl", kept));
+        const std::vector<MapPlays> plays = {{"Kept.lvl", map_hash_text(kept.hash), 2, 0}, {"Kept 2.lvl", map_hash_text(kept.hash), 5, 0}};
         for (bool extended : {false, true}) {
-            const ctl::JsonValue list = parse_text(store.list_json(nullptr, extended));
+            const ctl::JsonValue list = parse_text(store.list_json(&plays, extended));
             ASSERT_EQ(list.get("maps").size(), size_t{2});
             ASSERT_TRUE(entry_of(list, "TINY.LVL") != nullptr);
             ASSERT_TRUE(entry_of(list, "Kept.lvl") != nullptr);
+            if (entry_of(list, "Kept.lvl") != nullptr) ASSERT_EQ(entry_of(list, "Kept.lvl")->get("plays").as_int_or(-1), int64_t{7});   // (2 under its own name, 5 under the second one)
             ASSERT_TRUE(entry_of(list, "Kept 2.lvl") == nullptr);
+            ASSERT_TRUE(entry_of(list, "Alone.lvl") == nullptr);
         }
         MapEntry entry;
         ASSERT_TRUE(store.find("Kept 2.lvl", entry));
         ASSERT_EQ(store.listed_name("kept 2.LVL"), std::string("Kept 2.lvl"));
         RoomManager mgr{MapStore(maps.string(), community.string())};
         ASSERT_EQ(mgr.lobby_services().choose_map("Kept 2.lvl"), std::string("Kept 2.lvl"));
-        std::ofstream(community / "inactive.json") << "{ not json";
-        MapStore bad(maps.string(), community.string());
-        notes.clear();
-        ASSERT_EQ(bad.scan(&notes), size_t{3});
-        ASSERT_EQ(notes.size(), size_t{1});
-        ASSERT_EQ(list_of(bad).get("maps").size(), size_t{3});                                     // (every map is listed)
+        for (const char* text : {"{ not json", R"({"format":2,"inactive":[{"file":"Kept 2.lvl"}]})"}) {
+            std::ofstream(community / "inactive.json") << text;
+            MapStore bad(maps.string(), community.string());
+            notes.clear();
+            ASSERT_EQ(bad.scan(&notes), size_t{4});
+            ASSERT_EQ(notes.size(), size_t{1});
+            ASSERT_EQ(list_of(bad).get("maps").size(), size_t{4});                                 // (every map is listed)
+        }
+#ifdef __linux__
+        copy_map(maps_dir() + "/SMALL.LVL", community, "KEPT.LVL");                               // (a name that differs in letter case only: the offered map wins a lookup in another case)
+        std::ofstream(community / "inactive.json") << R"({"format":1,"inactive":[{"file":"KEPT.LVL","reason":"the same file as Kept.lvl"}]})";
+        MapStore cased(maps.string(), community.string());
+        cased.scan();
+        ASSERT_EQ(cased.listed_name("kept.lvl"), std::string("Kept.lvl"));
+        ASSERT_EQ(cased.listed_name("KEPT.LVL"), std::string("KEPT.LVL"));                         // (its own spelling still finds the inactive one)
+#endif
     } TEST_END();
 
     TEST_CASE("ML4.3 The lobby's choice is answered from the scanned list, without touching the disk: a listed map is accepted after its file is gone, a file that came after the scan is refused") {

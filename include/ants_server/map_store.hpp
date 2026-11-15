@@ -111,7 +111,7 @@ public:
     uint64_t pairs_of(const std::string& name) const;
     /// The cells (rows times columns) of the list's or the approved or test map `name` (exact name), 0 when it is not known: what a match on it costs (OnlineLimits::weight)
     uint64_t cells_of(const std::string& name) const;
-    /// The body of GET /maps: {"format":1,"maps":[{file,width,height,minutes,players,description,plays,thumb[,original][,maker]}]}, without the inactive maps. `plays` is how many times each map was played (map_plays of the database, keyed
+    /// The body of GET /maps: {"format":1,"maps":[{file,width,height,minutes,players,description,plays,thumb[,original][,maker]}]}, without the inactive maps (their plays count with the offered map of the same file). `plays` is how many times each map was played (map_plays of the database, keyed
     /// by file name and hash); null when the server keeps none: every count is 0 then. With `with_extended` (GET /maps/all, for the newest version only) the body is format 2: every entry also has "kind",
     /// and the approved Extended maps are in it, which GET /maps leaves out for older pages; a map that is too big for a room, or over its caps of starting ants or of pairs of a plant and a waypoint, carries
     /// "online": false (online_limits.hpp), with "online_why" naming "ants" or "pairs" (not the size reason).

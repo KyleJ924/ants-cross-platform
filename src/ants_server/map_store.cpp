@@ -168,9 +168,18 @@ size_t MapStore::scan(std::vector<std::string>* notes) {
         if (fs::exists(off, ec) && !ec) {
             if (!read_json_file(off, json, why)) {
                 note("inactive.json of the community folder " + why + ": every map is listed");
+            } else if (json.get("format").as_int_or(0) != 1) {
+                note("inactive.json of the community folder is not of format 1: every map is listed");
             } else {
                 const ctl::JsonValue& rows = json.get("inactive");
-                for (size_t i = 0; i < rows.size(); ++i) inactive.insert(rows.at(i).get("file").str());
+                for (size_t i = 0; i < rows.size(); ++i) {
+                    const std::string file = rows.at(i).get("file").str();
+                    if (file.empty()) {
+                        note("row " + std::to_string(i + 1) + " of inactive.json names no file: it is left out");
+                    } else {
+                        inactive.insert(file);
+                    }
+                }
             }
         } else if (ec) {
             note("inactive.json of the community folder cannot be looked at (" + ec.message() + "): every map is listed");
@@ -235,7 +244,14 @@ size_t MapStore::scan(std::vector<std::string>* notes) {
     };
     for (const auto& f : files_of(dir_)) add(f.first, false);
     for (const auto& f : files_of(community_dir_)) add(f.first, true);
-    for (const std::string& name : inactive) note("inactive.json names " + name + ", which is no map of the community folder");
+    for (const std::string& name : inactive) {
+        note("inactive.json names " + name + ", which the community folder does not offer (no such file there, a file that does not load, or a name of the maps folder)");
+    }
+    for (const MapListing& m : listing_) {                              // (an inactive map is a second name: the same file is offered under another one)
+        if (!m.inactive) continue;
+        const bool twin = std::any_of(listing_.begin(), listing_.end(), [&](const MapListing& o) { return !o.inactive && o.hash == m.hash; });
+        if (!twin) note("inactive.json names " + m.file + ", whose file is not offered under another name: the map is in no list at all");
+    }
     add_approved_to_listing();
     sort_listing();
     return listing_.size();
@@ -378,8 +394,10 @@ std::string MapStore::listed_name(const std::string& name) const {
     for (const ApprovedMap& t : test_maps_) {
         if (t.name == name && OnlineLimits::allows(t.counts())) return t.name;
     }
-    for (const MapListing& m : listing_) {
-        if (lower(m.file) == folded && OnlineLimits::allows(m.counts())) return m.file;
+    for (const bool inactive : {false, true}) {                         // (a name in another letter case: the offered map before an inactive one)
+        for (const MapListing& m : listing_) {
+            if (m.inactive == inactive && lower(m.file) == folded && OnlineLimits::allows(m.counts())) return m.file;
+        }
     }
     for (const MapListing& m : extended_listing_) {
         if (lower(m.file) == folded && OnlineLimits::allows(m.counts())) return m.file;
@@ -437,8 +455,14 @@ std::string MapStore::list_json(const std::vector<MapPlays>* plays, bool with_ex
     }
     ctl::JsonValue maps = ctl::JsonValue::make_array();
     std::vector<const MapListing*> shown;
+    std::map<uint64_t, int64_t> second_names;                           // hash -> the plays under the inactive names of that file, counted with the name that is offered
     for (const MapListing& m : listing_) {
-        if (!m.inactive) shown.push_back(&m);
+        if (!m.inactive) {
+            shown.push_back(&m);
+            continue;
+        }
+        const auto found = counts.find({m.file, map_hash_text(m.hash)});
+        if (found != counts.end()) second_names[m.hash] += found->second;
     }
     if (with_extended) {
         for (const MapListing& m : extended_listing_) shown.push_back(&m);
@@ -453,7 +477,8 @@ std::string MapStore::list_json(const std::vector<MapPlays>* plays, bool with_ex
         o.set("players", ctl::JsonValue::make_int(m.players));
         o.set("description", ctl::JsonValue::make_string(m.description));
         const auto found = counts.find({m.file, map_hash_text(m.hash)});
-        o.set("plays", ctl::JsonValue::make_int(found == counts.end() ? 0 : found->second));
+        const auto also = m.approved ? second_names.end() : second_names.find(m.hash);
+        o.set("plays", ctl::JsonValue::make_int((found == counts.end() ? 0 : found->second) + (also == second_names.end() ? 0 : also->second)));
         if (!m.thumb.empty()) o.set("thumb", ctl::JsonValue::make_string(m.thumb));
         if (m.original) o.set("original", ctl::JsonValue::make_bool(true));
         if (m.approved) o.set("maker", ctl::JsonValue::make_string(m.maker));
