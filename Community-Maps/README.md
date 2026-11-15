@@ -10,8 +10,13 @@ Maps that players of the 1998 game made and shared (`.lvl` files, the same forma
 - `maps.json`: one line for each map: `file`, `size`, `hash` (FNV-1a 64, the identity the network protocol gives a map file), `width`, `height`, `minutes`, `players` (the teams that have a hill or a start marker: 4 for every map) and `description` (the 30 characters of the file's header that the setup screen shows as Map Info, as the maker wrote them); a repaired map has one more field, `repaired`, a sentence that says what was changed. Made by `tools/community_maps.py`.
 
 - `previews/` and `previews.json`: a picture of every map (below).
+- `inactive.json`: the maps that are not offered (below), kept by hand.
 
 481 of the 534 files are different maps; the other 53 are the same map shared under a second name (`AlleyAnts` and `Alley Ants`), kept because the collection lists both.
+
+## Inactive maps
+
+`inactive.json` names the 53 second names: `{"format": 1, "inactive": [{"file": ..., "reason": ...}]}`, one row for each file. Of the files that are the same bytes, the one whose name comes first from A to Z, letter case aside and without `.lvl`, is offered (`Alley Ants`, not `AlleyAnts`), and the others are inactive. The server leaves an inactive map out of its list of maps (`GET /maps`, [`docs/SERVER.md`](../docs/SERVER.md)), so the map pickers do not offer it. The file stays in the folder, and the server still serves it, finds it and lets a lobby choose it by its name, so old links, replays and the match history keep working. The list is kept by hand, because no tool writes into this folder (`tools/library_guard.py`). To make a map inactive, add its row; to offer it again, remove the row. `tests/test_server/test_map_list.cpp` checks that each row names a map of the folder once, has a reason, and is the same file as a map that is offered.
 
 ## Bombs in the files
 

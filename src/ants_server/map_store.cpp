@@ -131,9 +131,10 @@ size_t MapStore::scan(std::vector<std::string>* notes) {
     auto note = [&](const std::string& line) {
         if (notes != nullptr) notes->push_back(line);
     };
-    // what maps.json and previews.json of the community folder say, by file name
+    // what maps.json, previews.json and inactive.json of the community folder say, by file name
     std::map<std::string, ctl::JsonValue> described;
     std::map<std::string, std::pair<std::string, std::string>> pictured;      // file -> (hash, picture)
+    std::set<std::string> inactive;                                             // the files that inactive.json names
     if (!community_dir_.empty()) {
         ctl::JsonValue json;
         std::string why;
@@ -160,6 +161,19 @@ size_t MapStore::scan(std::vector<std::string>* notes) {
             }
         } else if (ec) {
             note("previews.json of the community folder cannot be looked at (" + ec.message() + "): the maps have no pictures");
+        }
+        json = ctl::JsonValue();
+        const fs::path off = fs::path(community_dir_) / "inactive.json";      // (kept by hand: Community-Maps/README.md "Inactive maps")
+        ec.clear();
+        if (fs::exists(off, ec) && !ec) {
+            if (!read_json_file(off, json, why)) {
+                note("inactive.json of the community folder " + why + ": every map is listed");
+            } else {
+                const ctl::JsonValue& rows = json.get("inactive");
+                for (size_t i = 0; i < rows.size(); ++i) inactive.insert(rows.at(i).get("file").str());
+            }
+        } else if (ec) {
+            note("inactive.json of the community folder cannot be looked at (" + ec.message() + "): every map is listed");
         }
     }
     std::set<std::string> seen;
@@ -216,10 +230,12 @@ size_t MapStore::scan(std::vector<std::string>* notes) {
                 m.thumb = std::string(kCommunityPreviewDir) + percent_encode(picture->second.second);
             }
         }
+        m.inactive = community && inactive.erase(name) > 0;
         listing_.push_back(std::move(m));
     };
     for (const auto& f : files_of(dir_)) add(f.first, false);
     for (const auto& f : files_of(community_dir_)) add(f.first, true);
+    for (const std::string& name : inactive) note("inactive.json names " + name + ", which is no map of the community folder");
     add_approved_to_listing();
     sort_listing();
     return listing_.size();
@@ -421,7 +437,9 @@ std::string MapStore::list_json(const std::vector<MapPlays>* plays, bool with_ex
     }
     ctl::JsonValue maps = ctl::JsonValue::make_array();
     std::vector<const MapListing*> shown;
-    for (const MapListing& m : listing_) shown.push_back(&m);
+    for (const MapListing& m : listing_) {
+        if (!m.inactive) shown.push_back(&m);
+    }
     if (with_extended) {
         for (const MapListing& m : extended_listing_) shown.push_back(&m);
     }

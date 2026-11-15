@@ -620,7 +620,9 @@ int main(int argc, char** argv) {
     {
         std::vector<std::string> map_notes;
         const size_t listed = store.scan(&map_notes);                 // (every map is listed and hashed once, now; GET /maps lists them, the lobby may choose any of them)
-        log(std::to_string(listed) + " maps listed" + (o.community_maps_dir.empty() ? std::string() : " (maps folder and community folder " + o.community_maps_dir + ")"));
+        const auto inactive = std::count_if(store.listing().begin(), store.listing().end(), [](const ants::server::MapListing& m) { return m.inactive; });
+        log(std::to_string(listed) + " maps listed" + (o.community_maps_dir.empty() ? std::string() : " (maps folder and community folder " + o.community_maps_dir + ")") +
+            (inactive > 0 ? ", " + std::to_string(inactive) + " of them inactive (not in GET /maps)" : std::string()));
         for (const std::string& line : map_notes) log("maps: " + line);
     }
     if (o.demo_maps_given && o.demo_rooms == 0) {

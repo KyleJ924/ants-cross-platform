@@ -6,6 +6,7 @@
 #include <functional>
 #include <iomanip>
 #include <iostream>
+#include <set>
 #include <tuple>
 
 #include "../common/test_assert.hpp"
@@ -87,23 +88,42 @@ int main() {
         ASSERT_EQ(list.get("maps").at(0).get("minutes").as_int_or(0), int64_t{6});
     } TEST_END();
 
-    TEST_CASE("ML1.2 The community folder is listed as maps.json and previews.json say, after the originals, by file name; every map's hash is the file's own") {
+    TEST_CASE("ML1.2 The community folder is listed as maps.json and previews.json say, after the originals, by file name, but for the inactive maps (each a second name of a listed file); every map's hash is the file's own") {
         MapStore store(maps_dir(), community_dir());
         std::vector<std::string> notes;
         const size_t n = store.scan(&notes);
         const ctl::JsonValue json = parse_text(slurp(fs::path(community_dir()) / "maps.json"));
         const ctl::JsonValue pictures = parse_text(slurp(fs::path(community_dir()) / "previews.json"));
+        const ctl::JsonValue off = parse_text(slurp(fs::path(community_dir()) / "inactive.json"));
         ASSERT_EQ(json.get("maps").size(), size_t{534});
         ASSERT_EQ(n, size_t{6} + json.get("maps").size());
         ASSERT_TRUE(notes.empty());                                                                // (nothing is wrong with the repository's own lists)
+        std::set<std::string> inactive;
+        for (size_t i = 0; i < off.get("inactive").size(); ++i) {
+            const ctl::JsonValue& row = off.get("inactive").at(i);
+            ASSERT_TRUE(inactive.insert(row.get("file").str()).second);                           // (each name once)
+            ASSERT_FALSE(row.get("reason").str().empty());
+        }
         const ctl::JsonValue list = list_of(store);
-        ASSERT_EQ(list.get("maps").size(), n);
-        for (size_t i = 6; i < n; ++i) ASSERT_TRUE(list.get("maps").at(i).get("file").str() > list.get("maps").at(i - 1).get("file").str() || i == 6);
+        ASSERT_EQ(list.get("maps").size(), n - inactive.size());
+        for (size_t i = 7; i < list.get("maps").size(); ++i) ASSERT_TRUE(list.get("maps").at(i).get("file").str() > list.get("maps").at(i - 1).get("file").str());
         for (size_t i = 0; i < 6; ++i) ASSERT_TRUE(list.get("maps").at(i).get("original").as_bool_or(false));
+        std::set<std::string> listed_hashes;
+        for (size_t i = 0; i < json.get("maps").size(); ++i) {
+            if (inactive.count(json.get("maps").at(i).get("file").str()) == 0) listed_hashes.insert(json.get("maps").at(i).get("hash").str());
+        }
         for (size_t i = 0; i < json.get("maps").size(); ++i) {
             const ctl::JsonValue& want = json.get("maps").at(i);
             const std::string file = want.get("file").str();
             const ctl::JsonValue* got = entry_of(list, file);
+            if (inactive.count(file) != 0) {
+                ASSERT_TRUE(got == nullptr);                                                       // (an inactive map is not offered ...)
+                ASSERT_EQ(store.listed_name(file), file);                                          // (... but it is still chosen and found by its name)
+                MapEntry entry;
+                ASSERT_TRUE(store.find(file, entry));
+                ASSERT_TRUE(listed_hashes.count(want.get("hash").str()) == 1);                    // (the same file is listed under another name)
+                continue;
+            }
             ASSERT_TRUE(got != nullptr);
             if (got == nullptr) continue;
             for (const char* key : {"width", "height", "minutes", "players"}) ASSERT_EQ(got->get(key).as_int_or(-1), want.get(key).as_int_or(-2));
@@ -145,7 +165,7 @@ int main() {
             ASSERT_TRUE(fs::exists(fs::path(community_dir()) / "previews" / decoded));
             ++checked;
         }
-        ASSERT_EQ(checked, size_t{534});
+        ASSERT_EQ(checked, size_t{481});                                                           // (every community map that is offered: the 534 but the 53 inactive ones)
     } TEST_END();
 
     TEST_CASE("ML1.4 Every map of the community folder has the full setup of four seats, a hill and a start marker (so starting ants) for each, and can be played by each of them: no Fatal finding for its rosters, and no world that kills a lone team's ants within a minute") {
@@ -290,6 +310,40 @@ int main() {
         ASSERT_TRUE(notes.size() <= 2);                                                            // (a path that cannot be looked at is a note, or simply not there: never an exception)
     } TEST_END();
 
+    TEST_CASE("ML2.4 inactive.json: a map it names is left out of GET /maps and /maps/all but still found, served and chosen by the lobby; a name that is no map of the community folder, or a bad file, is a note") {
+        TempDir t;
+        const fs::path maps = t.path / "maps";
+        const fs::path community = t.path / "community";
+        fs::create_directories(maps);
+        fs::create_directories(community);
+        copy_map(maps_dir() + "/TINY.LVL", maps, "TINY.LVL");
+        copy_map(maps_dir() + "/SMALL.LVL", community, "Kept.lvl");
+        copy_map(maps_dir() + "/SMALL.LVL", community, "Kept 2.lvl");
+        std::ofstream(community / "inactive.json") << R"({"format":1,"inactive":[{"file":"Kept 2.lvl","reason":"the same file as Kept.lvl"},{"file":"TINY.LVL","reason":"x"},{"file":"Ghost.lvl","reason":"x"}]})";
+        MapStore store(maps.string(), community.string());
+        std::vector<std::string> notes;
+        ASSERT_EQ(store.scan(&notes), size_t{3});
+        ASSERT_EQ(notes.size(), size_t{2});                                                        // (Ghost.lvl is not there; TINY.LVL is the maps folder's, which inactive.json does not reach)
+        for (bool extended : {false, true}) {
+            const ctl::JsonValue list = parse_text(store.list_json(nullptr, extended));
+            ASSERT_EQ(list.get("maps").size(), size_t{2});
+            ASSERT_TRUE(entry_of(list, "TINY.LVL") != nullptr);
+            ASSERT_TRUE(entry_of(list, "Kept.lvl") != nullptr);
+            ASSERT_TRUE(entry_of(list, "Kept 2.lvl") == nullptr);
+        }
+        MapEntry entry;
+        ASSERT_TRUE(store.find("Kept 2.lvl", entry));
+        ASSERT_EQ(store.listed_name("kept 2.LVL"), std::string("Kept 2.lvl"));
+        RoomManager mgr{MapStore(maps.string(), community.string())};
+        ASSERT_EQ(mgr.lobby_services().choose_map("Kept 2.lvl"), std::string("Kept 2.lvl"));
+        std::ofstream(community / "inactive.json") << "{ not json";
+        MapStore bad(maps.string(), community.string());
+        notes.clear();
+        ASSERT_EQ(bad.scan(&notes), size_t{3});
+        ASSERT_EQ(notes.size(), size_t{1});
+        ASSERT_EQ(list_of(bad).get("maps").size(), size_t{3});                                     // (every map is listed)
+    } TEST_END();
+
     TEST_CASE("ML4.3 The lobby's choice is answered from the scanned list, without touching the disk: a listed map is accepted after its file is gone, a file that came after the scan is refused") {
         TempDir t;
         const fs::path dir = t.path / "maps";
@@ -391,7 +445,7 @@ int main() {
         const ctl::JsonValue list = parse_text(r.body);
         ASSERT_EQ(entry_of(list, "TREASURE.LVL")->get("plays").as_int_or(-1), int64_t{2});
         ASSERT_EQ(entry_of(list, "TINY.LVL")->get("plays").as_int_or(-1), int64_t{0});
-        ASSERT_EQ(list.get("maps").size(), size_t{540});
+        ASSERT_EQ(list.get("maps").size(), size_t{487});                                           // (the six originals and the 481 community maps that are offered)
         mgr.disable_history();
     } TEST_END();
 

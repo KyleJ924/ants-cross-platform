@@ -186,7 +186,7 @@ class TheBuildPutsThePicturesAndTheMapsWhereNginxLooks(unittest.TestCase):
 
     def test_the_game_server_image_has_the_maps_in_a_folder_of_their_own_that_no_volume_hides(self):
         text = read("Dockerfile.server")
-        self.assertRegex(text, r"COPY Community-Maps/\*\.lvl Community-Maps/\*\.LVL Community-Maps/maps\.json Community-Maps/previews\.json /community-maps/")
+        self.assertRegex(text, r"COPY Community-Maps/\*\.lvl Community-Maps/\*\.LVL Community-Maps/maps\.json Community-Maps/previews\.json Community-Maps/inactive\.json /community-maps/")
         self.assertIn('"--community-maps", "/community-maps"', text)
         for compose in ("docker-compose.stack.yml", "docker-compose.server.yml"):
             body = read(compose)

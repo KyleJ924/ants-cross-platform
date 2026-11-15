@@ -417,22 +417,23 @@ for _ in $(seq 1 $((300 * TIME_SCALE))); do      # (30 s: the parts run side by 
     sleep 0.1
 done
 if [ "$CM_UP" != "0" ]; then fail_note "the server with --community-maps did not log its public door within $((30 * TIME_SCALE)) s ($(kill -0 "$CM_PID" 2> /dev/null && echo "it still runs" || echo "it ended")); its log: $(tail -n 5 "$WORK/cm.log" 2> /dev/null | tr '\n' '|')"; fi
-check "a server with --community-maps lists them: GET /maps on the public door is maps.json after the six originals, with no play counts (no database), and a query or a path below it is a 404" "$(curl -s -m 5 "http://127.0.0.1:$CM_PORT/maps" | python3 -c '
+check "a server with --community-maps lists them: GET /maps on the public door is maps.json after the six originals, but for the inactive maps, with no play counts (no database), and a query or a path below it is a 404" "$(curl -s -m 5 "http://127.0.0.1:$CM_PORT/maps" | python3 -c '
 import sys, json
 d = json.load(sys.stdin)
-want = json.load(open(sys.argv[1] + "/Community-Maps/maps.json"))["maps"]
+off = {r["file"] for r in json.load(open(sys.argv[1] + "/Community-Maps/inactive.json"))["inactive"]}
+want = [w for w in json.load(open(sys.argv[1] + "/Community-Maps/maps.json"))["maps"] if w["file"] not in off]
 previews = json.load(open(sys.argv[1] + "/Community-Maps/previews.json"))
 m = d["maps"]
 ok = d["format"] == 1 and len(m) == 6 + len(want)
 ok = ok and [x["file"] for x in m[:6]] == ["TINY.LVL", "SMALL.LVL", "MEDIUM.LVL", "GAUNTLET.LVL", "TREASURE.LVL", "ISLANDS.LVL"] and all(x.get("original") is True for x in m[:6])
 rest = {x["file"]: x for x in m[6:]}
-ok = ok and len(rest) == len(want) and all(x["plays"] == 0 and ("original" in x) == (x["file"] in ("TINY.LVL", "SMALL.LVL", "MEDIUM.LVL", "GAUNTLET.LVL", "TREASURE.LVL", "ISLANDS.LVL")) for x in m)
+ok = ok and len(rest) == len(want) and not off & set(rest) and all(x["plays"] == 0 and ("original" in x) == (x["file"] in ("TINY.LVL", "SMALL.LVL", "MEDIUM.LVL", "GAUNTLET.LVL", "TREASURE.LVL", "ISLANDS.LVL")) for x in m)
 for w in want:
     g = rest.get(w["file"])
     ok = ok and g is not None and all(g[k] == w[k] for k in ("width", "height", "minutes", "players", "description")) and g["thumb"].startswith("/maps/previews/") and "picture" in previews[w["file"]]
 sys.exit(0 if ok else 1)' "$ROOT"; echo $?)"
 check "... and the same door refuses what is not the plain list (a query and a name below /maps: 404, a POST: 405)" "$([ "$(code_of "http://127.0.0.1:$CM_PORT/maps?x=1")" = "404" ] && [ "$(code_of -X POST "http://127.0.0.1:$CM_PORT/maps")" = "405" ] && [ "$(code_of "http://127.0.0.1:$CM_PORT/maps/TINY.LVL")" = "404" ]; echo $?)"
-check "... and the log says how many maps are listed" "$(grep -q '^\[ants_server [0-9]*\] 540 maps listed (maps folder and community folder' "$WORK/cm.log"; echo $?)"
+check "... and the log says how many maps are listed, and how many of them are inactive" "$(grep -q '^\[ants_server [0-9]*\] 540 maps listed (maps folder and community folder .*), 53 of them inactive' "$WORK/cm.log"; echo $?)"
 stop_pids "ants_server of the community maps (stopped with SIGTERM)" "$CM_PID"
 # the match history lives in the database (docs/REPLAYS.md "The match history"): no folder of its own, --no-history turns it off, --no-db leaves it nothing to live in
 check "--help names --no-history, and there is no --history-dir (the history is in the database: a leftover option is refused, status 2)" "$("$SERVER" --help 2>&1 | grep -q -- '--no-history'; [ "$(exit_of --history-dir "$WORK/hi_none")" = "2" ]; echo $?)"

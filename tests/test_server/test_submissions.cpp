@@ -680,6 +680,7 @@ int main() {
         MapStore store(maps_dir(), std::string(ANTS_SOURCE_DIR) + "/Community-Maps");
         store.scan();
         const size_t before = store.listing().size();
+        const size_t shown_before = parse_text(store.list_json(nullptr)).get("maps").size();      // (the list leaves out the inactive community maps: Community-Maps/README.md)
         const SubmitOutcome classic = rig.send("Fresh Classic");
         SubmitInput in = rig.input(extended_tiny(), "Fresh Extended");
         in.kind = "extended";
@@ -698,7 +699,7 @@ int main() {
         };
         ASSERT_TRUE(has(plain, "Fresh Classic.lvl") && !has(plain, "Fresh Extended.lvl"));              // (an old version never sees an Extended map)
         ASSERT_TRUE(has(all, "Fresh Classic.lvl") && has(all, "Fresh Extended.lvl"));
-        ASSERT_EQ(plain.get("maps").size(), before + 1);
+        ASSERT_EQ(plain.get("maps").size(), shown_before + 1);
         for (size_t i = 0; i < plain.get("maps").size(); ++i) ASSERT_FALSE(plain.get("maps").at(i).has("kind"));       // (the list of before has no new member)
         for (size_t i = 0; i < all.get("maps").size(); ++i) {
             const ctl::JsonValue& m = all.get("maps").at(i);

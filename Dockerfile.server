@@ -72,9 +72,9 @@ RUN useradd --system --no-create-home --shell /usr/sbin/nologin ants && \
 # The maps of the original game (the same files as the web game's data)
 COPY Original-Ants/Maps/ /maps/
 
-# The players' maps (the .lvl files of Community-Maps/ with the two lists that describe them: GET /maps) in a folder of their own, which the server reads with --community-maps. NOT in /maps: the stack mounts a
+# The players' maps (the .lvl files of Community-Maps/ with the two lists that describe them and the list of the inactive ones: GET /maps) in a folder of their own, which the server reads with --community-maps. NOT in /maps: the stack mounts a
 # volume there that is filled from the image once and then kept, and a volume (or an ANTS_MAPS_DIR) would hide them, or show an old set after an update. (The previews are the site image's: docker/nginx.conf.)
-COPY Community-Maps/*.lvl Community-Maps/*.LVL Community-Maps/maps.json Community-Maps/previews.json /community-maps/
+COPY Community-Maps/*.lvl Community-Maps/*.LVL Community-Maps/maps.json Community-Maps/previews.json Community-Maps/inactive.json /community-maps/
 
 COPY --from=builder /src/build/src/ants_server/ants_server /usr/local/bin/ants_server
 

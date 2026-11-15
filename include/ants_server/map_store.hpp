@@ -47,6 +47,7 @@ struct MapListing {
     bool approved{false};      // a map that a player sent and the owner approved (docs/MAP_SUBMISSIONS.md): its file is in the submissions folder
     std::string maker;         // the maker's display name (an approved map only)
     std::string kind{"classic"};     // "classic" or "extended" (an Extended map is only ever listed by list_json(.., true))
+    bool inactive{false};      // a community map that the folder's inactive.json names (a second name of the same file): left out of GET /maps, still found, chosen and served by its name
     /// Every number that a room's limits look at, from the record's own fields (the cells are its rows times columns)
     MapCounts counts() const noexcept { return MapCounts{static_cast<uint64_t>(width) * height, start_ants, pairs, food_objects, power_ups}; }
 };
@@ -82,8 +83,9 @@ public:
     /// (the maps folder is asked first, then the community folder)
     bool find(const std::string& name, MapEntry& out, std::string* why = nullptr) const;
 
-    /// Lists and hashes every map of both folders (a file that find() would refuse is left out) and reads the community folder's maps.json and previews.json. Returns the number of maps; `notes` gets one line
-    /// for each thing that is wrong but not fatal (a bad json file, a map that maps.json describes with another hash). The list: the six originals first, in the order of originals(), then the others by file name.
+    /// Lists and hashes every map of both folders (a file that find() would refuse is left out) and reads the community folder's maps.json, previews.json and inactive.json. Returns the number of maps, the
+    /// inactive ones too; `notes` gets one line for each thing that is wrong but not fatal (a bad json file, a map that maps.json describes with another hash, an inactive name that is no map of the folder).
+    /// The list: the six originals first, in the order of originals(), then the others by file name.
     size_t scan(std::vector<std::string>* notes = nullptr);
     const std::vector<MapListing>& listing() const noexcept { return listing_; }
     bool scanned() const noexcept { return scanned_; }
@@ -109,7 +111,7 @@ public:
     uint64_t pairs_of(const std::string& name) const;
     /// The cells (rows times columns) of the list's or the approved or test map `name` (exact name), 0 when it is not known: what a match on it costs (OnlineLimits::weight)
     uint64_t cells_of(const std::string& name) const;
-    /// The body of GET /maps: {"format":1,"maps":[{file,width,height,minutes,players,description,plays,thumb[,original][,maker]}]}. `plays` is how many times each map was played (map_plays of the database, keyed
+    /// The body of GET /maps: {"format":1,"maps":[{file,width,height,minutes,players,description,plays,thumb[,original][,maker]}]}, without the inactive maps. `plays` is how many times each map was played (map_plays of the database, keyed
     /// by file name and hash); null when the server keeps none: every count is 0 then. With `with_extended` (GET /maps/all, for the newest version only) the body is format 2: every entry also has "kind",
     /// and the approved Extended maps are in it, which GET /maps leaves out for older pages; a map that is too big for a room, or over its caps of starting ants or of pairs of a plant and a waypoint, carries
     /// "online": false (online_limits.hpp), with "online_why" naming "ants" or "pairs" (not the size reason).
